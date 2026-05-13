@@ -6,10 +6,16 @@ import '../../data/app_launcher.dart';
 import '../../domain/launcher_app.dart';
 
 class AppTile extends StatelessWidget {
-  const AppTile({required this.app, this.autofocus = false, super.key});
+  const AppTile({
+    required this.app,
+    this.autofocus = false,
+    this.focusNode,
+    super.key,
+  });
 
   final LauncherApp app;
   final bool autofocus;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +32,7 @@ class AppTile extends StatelessWidget {
       },
       child: Focus(
         autofocus: autofocus,
+        focusNode: focusNode,
         child: Builder(
           builder: (context) {
             final focused = Focus.of(context).hasFocus;

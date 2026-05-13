@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../ui/input/contained_directional_focus.dart';
+
 class SearchKeyboard extends StatelessWidget {
   const SearchKeyboard({
     required this.query,
@@ -96,8 +98,7 @@ class _SearchKeyboardBodyState extends State<_SearchKeyboardBody> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return FocusTraversalGroup(
-      policy: ReadingOrderTraversalPolicy(),
+    return ContainedDirectionalFocus(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
         child: Column(

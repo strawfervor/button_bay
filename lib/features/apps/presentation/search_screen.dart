@@ -106,7 +106,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   title: 'Brak wyników',
                 );
               }
-              return AppGrid(apps: _results);
+              return AppGrid(apps: _results, active: widget.active);
             }
 
             return SearchKeyboard(

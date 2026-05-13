@@ -324,27 +324,46 @@ class _MainScreenState extends State<MainScreen>
                         return IndexedStack(
                           index: activeIndex,
                           children: [
-                            AppsScreen(
-                              appsFuture: _allAppsFuture,
-                              onReload: _reloadAllApps,
-                              emptyTitle: 'Brak znalezionych aplikacji',
+                            ExcludeFocus(
+                              excluding: activeIndex != 0,
+                              child: AppsScreen(
+                                appsFuture: _allAppsFuture,
+                                onReload: _reloadAllApps,
+                                emptyTitle: 'Brak znalezionych aplikacji',
+                                active: activeIndex == 0,
+                              ),
                             ),
-                            AppsScreen(
-                              appsFuture: _myAppsFuture,
-                              onReload: _reloadMyApps,
-                              emptyTitle: _appsDirectoryPath == null
-                                  ? 'Wybierz folder w Settings'
-                                  : 'Brak plików .lnk lub .desktop',
+                            ExcludeFocus(
+                              excluding: activeIndex != 1,
+                              child: AppsScreen(
+                                appsFuture: _myAppsFuture,
+                                onReload: _reloadMyApps,
+                                emptyTitle: _appsDirectoryPath == null
+                                    ? 'Wybierz folder w Settings'
+                                    : 'Brak plików .lnk lub .desktop',
+                                active: activeIndex == 1,
+                              ),
                             ),
-                            SearchScreen(
-                              appsFuture: _allAppsFuture,
-                              active: activeIndex == 2,
+                            ExcludeFocus(
+                              excluding: activeIndex != 2,
+                              child: SearchScreen(
+                                appsFuture: _allAppsFuture,
+                                active: activeIndex == 2,
+                              ),
                             ),
-                            const _FileManagerPlaceholder(),
-                            SettingsScreen(
-                              appsDirectoryPath: _appsDirectoryPath,
-                              active: activeIndex == 4,
-                              onAppsDirectoryChanged: _setAppsDirectory,
+                            ExcludeFocus(
+                              excluding: activeIndex != 3,
+                              child: _FileManagerPlaceholder(
+                                active: activeIndex == 3,
+                              ),
+                            ),
+                            ExcludeFocus(
+                              excluding: activeIndex != 4,
+                              child: SettingsScreen(
+                                appsDirectoryPath: _appsDirectoryPath,
+                                active: activeIndex == 4,
+                                onAppsDirectoryChanged: _setAppsDirectory,
+                              ),
                             ),
                           ],
                         );
@@ -452,20 +471,76 @@ class _ControlHint extends StatelessWidget {
   }
 }
 
-class _FileManagerPlaceholder extends StatelessWidget {
-  const _FileManagerPlaceholder();
+class _FileManagerPlaceholder extends StatefulWidget {
+  const _FileManagerPlaceholder({required this.active});
+
+  final bool active;
+
+  @override
+  State<_FileManagerPlaceholder> createState() =>
+      _FileManagerPlaceholderState();
+}
+
+class _FileManagerPlaceholderState extends State<_FileManagerPlaceholder> {
+  final FocusNode _focusNode = FocusNode(debugLabel: 'Files placeholder');
+
+  @override
+  void initState() {
+    super.initState();
+    _focusIfActive();
+  }
+
+  @override
+  void didUpdateWidget(_FileManagerPlaceholder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) {
+      _focusIfActive();
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _focusIfActive() {
+    if (!widget.active) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.active) {
+        _focusNode.requestFocus();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.folder_outlined, size: 56),
-          const SizedBox(height: 14),
-          Text('File manager', style: theme.textTheme.titleMedium),
-        ],
+    return Focus(
+      focusNode: _focusNode,
+      child: Builder(
+        builder: (context) {
+          final focused = Focus.of(context).hasFocus;
+          final color = focused
+              ? theme.colorScheme.primary
+              : theme.colorScheme.onSurface;
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.folder_outlined, size: 56, color: color),
+                const SizedBox(height: 14),
+                Text(
+                  'File manager',
+                  style: theme.textTheme.titleMedium?.copyWith(color: color),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
