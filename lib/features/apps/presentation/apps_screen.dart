@@ -7,11 +7,13 @@ class AppsScreen extends StatefulWidget {
   const AppsScreen({
     required this.appsFuture,
     required this.onReload,
+    required this.emptyTitle,
     super.key,
   });
 
   final Future<List<LauncherApp>> appsFuture;
   final VoidCallback onReload;
+  final String emptyTitle;
 
   @override
   State<AppsScreen> createState() => _AppsScreenState();
@@ -43,7 +45,7 @@ class _AppsScreenState extends State<AppsScreen> {
         if (apps.isEmpty) {
           return _AppsMessage(
             icon: Icons.apps_outlined,
-            title: 'Brak znalezionych aplikacji',
+            title: widget.emptyTitle,
             action: IconButton(
               tooltip: 'Odśwież',
               onPressed: widget.onReload,

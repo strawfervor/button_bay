@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:button_bay/features/apps/data/app_shortcut_scanner.dart';
 import 'package:button_bay/features/apps/domain/launcher_app.dart';
 import 'package:button_bay/features/apps/presentation/apps_screen.dart';
 import 'package:button_bay/features/apps/presentation/search_screen.dart';
+import 'package:button_bay/features/settings/data/app_settings_store.dart';
+import 'package:button_bay/features/settings/presentation/settings_screen.dart';
 import 'package:button_bay/ui/input/app_intents.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,20 +22,30 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  late Future<List<LauncherApp>> _appsFuture;
+  late final Future<AppSettingsStore> _settingsStoreFuture;
+  late Future<List<LauncherApp>> _allAppsFuture;
+  late Future<List<LauncherApp>> _myAppsFuture;
+  final FocusNode _shellFocusNode = FocusNode(debugLabel: 'Main shell');
   StreamSubscription<GamepadEvent>? _gamepadSubscription;
   final Map<String, int> _lastGamepadActionAt = {};
+  AppSettingsStore? _settingsStore;
+  String? _appsDirectoryPath;
 
   static const _tabs = [
     _ShellTab(label: 'All apps', icon: Icons.apps),
+    _ShellTab(label: 'My apps', icon: Icons.dashboard_customize),
     _ShellTab(label: 'Search', icon: Icons.search),
     _ShellTab(label: 'Files', icon: Icons.folder),
+    _ShellTab(label: 'Settings', icon: Icons.settings),
   ];
 
   @override
   void initState() {
     super.initState();
-    _appsFuture = const AppShortcutScanner().scan();
+    _settingsStoreFuture = AppSettingsStore.open();
+    _allAppsFuture = _loadAllApps();
+    _myAppsFuture = _loadMyApps();
+    _loadSettings();
     _tabController = TabController(length: _tabs.length, vsync: this);
     _gamepadSubscription = Gamepads.events.listen(_handleGamepadEvent);
   }
@@ -40,13 +53,62 @@ class _MainScreenState extends State<MainScreen>
   @override
   void dispose() {
     _gamepadSubscription?.cancel();
+    _shellFocusNode.dispose();
     _tabController.dispose();
     super.dispose();
   }
 
-  void _reloadApps() {
+  Future<void> _loadSettings() async {
+    final settingsStore = await _settingsStoreFuture;
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
-      _appsFuture = const AppShortcutScanner().scan();
+      _settingsStore = settingsStore;
+      _appsDirectoryPath = settingsStore.appsDirectoryPath;
+      _myAppsFuture = _loadMyApps(settingsStore.appsDirectoryPath);
+    });
+  }
+
+  Future<List<LauncherApp>> _loadAllApps() {
+    return const AppShortcutScanner().scan();
+  }
+
+  Future<List<LauncherApp>> _loadMyApps([String? directoryPath]) {
+    if (directoryPath == null || directoryPath.trim().isEmpty) {
+      return Future.value(const []);
+    }
+    if (!Directory(directoryPath).existsSync()) {
+      return Future.value(const []);
+    }
+    return const AppShortcutScanner().scan(directoryPath: directoryPath);
+  }
+
+  void _reloadAllApps() {
+    setState(() {
+      _allAppsFuture = _loadAllApps();
+    });
+  }
+
+  void _reloadMyApps() {
+    setState(() {
+      _myAppsFuture = _loadMyApps(_appsDirectoryPath);
+    });
+  }
+
+  Future<void> _setAppsDirectory(String path) async {
+    final settingsStore = _settingsStore ?? await _settingsStoreFuture;
+    await settingsStore.setAppsDirectoryPath(path);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _settingsStore = settingsStore;
+      _appsDirectoryPath = path;
+      _myAppsFuture = _loadMyApps(path);
+      _tabController.animateTo(1, duration: Duration.zero);
     });
   }
 
@@ -180,6 +242,20 @@ class _MainScreenState extends State<MainScreen>
     Actions.maybeInvoke(context, intent);
   }
 
+  KeyEventResult _handleShellKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.tab) {
+      return KeyEventResult.ignored;
+    }
+
+    final shiftPressed = HardwareKeyboard.instance.logicalKeysPressed.any(
+      (key) =>
+          key == LogicalKeyboardKey.shiftLeft ||
+          key == LogicalKeyboardKey.shiftRight,
+    );
+    _selectRelativeTab(shiftPressed ? -1 : 1);
+    return KeyEventResult.handled;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -205,59 +281,79 @@ class _MainScreenState extends State<MainScreen>
             },
           ),
         },
-        child: Scaffold(
-          backgroundColor: theme.colorScheme.surface,
-          body: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 18, 24, 8),
-                  child: Row(
-                    children: [
-                      Text(
-                        'ButtonBay',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
+        child: Focus(
+          focusNode: _shellFocusNode,
+          autofocus: true,
+          onKeyEvent: _handleShellKeyEvent,
+          child: Scaffold(
+            backgroundColor: theme.colorScheme.surface,
+            body: SafeArea(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 18, 24, 8),
+                    child: Row(
+                      children: [
+                        Text(
+                          'ButtonBay',
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
-                      const Spacer(),
-                      SizedBox(
-                        width: 420,
-                        child: TabBar(
-                          controller: _tabController,
-                          tabs: [
-                            for (final tab in _tabs)
-                              Tab(icon: Icon(tab.icon), text: tab.label),
+                        const SizedBox(width: 24),
+                        Expanded(
+                          child: ExcludeFocus(
+                            child: TabBar(
+                              isScrollable: true,
+                              controller: _tabController,
+                              tabs: [
+                                for (final tab in _tabs)
+                                  Tab(icon: Icon(tab.icon), text: tab.label),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: AnimatedBuilder(
+                      animation: _tabController,
+                      builder: (context, _) {
+                        final activeIndex = _tabController.index;
+                        return IndexedStack(
+                          index: activeIndex,
+                          children: [
+                            AppsScreen(
+                              appsFuture: _allAppsFuture,
+                              onReload: _reloadAllApps,
+                              emptyTitle: 'Brak znalezionych aplikacji',
+                            ),
+                            AppsScreen(
+                              appsFuture: _myAppsFuture,
+                              onReload: _reloadMyApps,
+                              emptyTitle: _appsDirectoryPath == null
+                                  ? 'Wybierz folder w Settings'
+                                  : 'Brak plików .lnk lub .desktop',
+                            ),
+                            SearchScreen(
+                              appsFuture: _allAppsFuture,
+                              active: activeIndex == 2,
+                            ),
+                            const _FileManagerPlaceholder(),
+                            SettingsScreen(
+                              appsDirectoryPath: _appsDirectoryPath,
+                              active: activeIndex == 4,
+                              onAppsDirectoryChanged: _setAppsDirectory,
+                            ),
                           ],
-                        ),
-                      ),
-                    ],
+                        );
+                      },
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: AnimatedBuilder(
-                    animation: _tabController,
-                    builder: (context, _) {
-                      final activeIndex = _tabController.index;
-                      return IndexedStack(
-                        index: activeIndex,
-                        children: [
-                          AppsScreen(
-                            appsFuture: _appsFuture,
-                            onReload: _reloadApps,
-                          ),
-                          SearchScreen(
-                            appsFuture: _appsFuture,
-                            active: activeIndex == 1,
-                          ),
-                          const _FileManagerPlaceholder(),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-                const _ControlHintsBar(),
-              ],
+                  const _ControlHintsBar(),
+                ],
+              ),
             ),
           ),
         ),

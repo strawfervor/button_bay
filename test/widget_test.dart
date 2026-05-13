@@ -17,8 +17,10 @@ void main() {
 
     expect(find.text('ButtonBay'), findsOneWidget);
     expect(find.text('All apps'), findsOneWidget);
+    expect(find.text('My apps'), findsOneWidget);
     expect(find.text('Search'), findsOneWidget);
     expect(find.text('Files'), findsOneWidget);
+    expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Enter / A'), findsOneWidget);
     expect(find.text('Run'), findsOneWidget);
     expect(find.text('B / Backspace'), findsOneWidget);

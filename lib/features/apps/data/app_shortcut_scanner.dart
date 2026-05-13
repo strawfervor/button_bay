@@ -6,25 +6,35 @@ import '../domain/launcher_app.dart';
 class AppShortcutScanner {
   const AppShortcutScanner();
 
-  Future<List<LauncherApp>> scan() async {
+  Future<List<LauncherApp>> scan({String? directoryPath}) async {
+    final selectedDirectory = _directoryFromPath(directoryPath);
     if (Platform.isWindows) {
-      return _scanWindows();
+      return _scanWindows(selectedDirectory);
     }
 
     if (Platform.isLinux) {
-      return _scanLinux();
+      return _scanLinux(selectedDirectory);
     }
 
     return const [];
   }
 
-  Future<List<LauncherApp>> _scanLinux() async {
+  Directory? _directoryFromPath(String? path) {
+    if (path == null || path.trim().isEmpty) {
+      return null;
+    }
+
+    final directory = Directory(path);
+    return directory.existsSync() ? directory : null;
+  }
+
+  Future<List<LauncherApp>> _scanLinux(Directory? selectedDirectory) async {
     final files = <File>[];
-    for (final directory in _linuxShortcutDirectories()) {
+    for (final directory in _linuxShortcutDirectories(selectedDirectory)) {
       if (!directory.existsSync()) {
         continue;
       }
-      await for (final entity in directory.list(recursive: false)) {
+      await for (final entity in directory.list(recursive: true)) {
         if (entity is File && entity.path.endsWith('.desktop')) {
           files.add(entity);
         }
@@ -46,7 +56,11 @@ class AppShortcutScanner {
     return apps;
   }
 
-  List<Directory> _linuxShortcutDirectories() {
+  List<Directory> _linuxShortcutDirectories(Directory? selectedDirectory) {
+    if (selectedDirectory != null) {
+      return [selectedDirectory];
+    }
+
     final home = Platform.environment['HOME'];
     return [
       Directory('/usr/share/applications'),
@@ -127,9 +141,9 @@ class AppShortcutScanner {
 
   bool _isTruthy(String? value) => value?.toLowerCase() == 'true';
 
-  Future<List<LauncherApp>> _scanWindows() async {
+  Future<List<LauncherApp>> _scanWindows(Directory? selectedDirectory) async {
     final files = <File>[];
-    for (final directory in _windowsShortcutDirectories()) {
+    for (final directory in _windowsShortcutDirectories(selectedDirectory)) {
       if (!directory.existsSync()) {
         continue;
       }
@@ -154,7 +168,11 @@ class AppShortcutScanner {
     return apps;
   }
 
-  List<Directory> _windowsShortcutDirectories() {
+  List<Directory> _windowsShortcutDirectories(Directory? selectedDirectory) {
+    if (selectedDirectory != null) {
+      return [selectedDirectory];
+    }
+
     final programData = Platform.environment['ProgramData'];
     final appData = Platform.environment['APPDATA'];
     final publicProfile = Platform.environment['PUBLIC'];
